@@ -9,7 +9,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const dataDir = path.resolve("./data");
+
+const dataDir = path.resolve("/tmp/data"); // Use /tmp for cloud environments
 const dataFile = path.join(dataDir, "leaderboard.json");
 
 const emptyState = {
@@ -40,9 +41,13 @@ async function loadState() {
 }
 
 async function saveState() {
-  const tmp = `${dataFile}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(state, null, 2));
-  await fs.rename(tmp, dataFile);
+  try {
+    await fs.mkdir(dataDir, { recursive: true });
+    // Write directly to the file instead of renaming for better compatibility in /tmp
+    await fs.writeFile(dataFile, JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.error("Failed to save state:", err);
+  }
 }
 
 function getLatestPoints(userId) {
