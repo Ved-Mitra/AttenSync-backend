@@ -169,24 +169,34 @@ const io = new SocketIOServer(server, {
   }
 });
 
+// ... existing imports and state logic ...
+
 io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+
   socket.on("join_topic", (topic) => {
     if (typeof topic === "string" && topic.length > 0) {
       socket.join(topic);
+      console.log(`Socket ${socket.id} joined topic: ${topic}`);
     }
   });
 
   socket.on("leave_topic", (topic) => {
     if (typeof topic === "string" && topic.length > 0) {
       socket.leave(topic);
+      console.log(`Socket ${socket.id} left topic: ${topic}`);
     }
   });
 
-  socket.on("new message", async (data) => {
+  socket.on("chat message", async (data) => {
+    console.log("Received message:", data);
+    
     const topic = data?.topic;
-    const text = data?.text;
-    const sender = data?.sender || "Anonymous";
+    const text = data?.message;
+    const sender = data?.user || "Anonymous";
+
     if (typeof topic !== "string" || typeof text !== "string" || !text.trim()) {
+      console.error("Invalid message data received");
       return;
     }
 
@@ -197,17 +207,21 @@ io.on("connection", (socket) => {
       sender,
       timestamp: Date.now()
     };
+    
     state.discussion.messages.push(message);
     await saveState();
 
-    io.to(topic).emit("new message", {
-      topic,
-      text,
-      sender,
-      timestamp: message.timestamp
-    });
+    // THIS IS THE KEY: io.to(topic).emit sends it to EVERYONE in that room
+    io.to(topic).emit("chat message", message);
+    console.log(`Broadcasted message to topic ${topic}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
   });
 });
+
+// ... rest of your server listen logic ...
 
 const port = process.env.PORT || 8080;
 server.listen(port, () => {
