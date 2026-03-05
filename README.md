@@ -11,6 +11,7 @@ Express + JSON file storage leaderboard API (no native addons).
 - `POST /v1/usage`
 - `GET /v1/points/:userId`
 - `GET /v1/leaderboard?limit=20`
+- `GET /v1/discussion/:topic?limit=50`
 
 ### POST /v1/usage
 
@@ -28,6 +29,16 @@ Express + JSON file storage leaderboard API (no native addons).
 
 Points are computed per app as `(previous - current) * factor`.
 If negative, the factor is halved: `factor * 0.5`.
+
+## Discussion (Socket.IO)
+
+Socket events:
+
+- `join_topic` → payload: `"Computer Science"`
+- `leave_topic` → payload: `"Computer Science"`
+- `new message` → payload: `{ "topic": "Computer Science", "sender": "You", "text": "Hello" }`
+
+Messages are persisted in `data/leaderboard.json` under `discussion.messages`.
 
 ## Run
 

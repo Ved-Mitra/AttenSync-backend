@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createServer } from "node:http";
+import { Server as SocketIOServer } from "socket.io";
 
 const app = express();
 app.use(cors());
@@ -13,7 +15,10 @@ const dataFile = path.join(dataDir, "leaderboard.json");
 const emptyState = {
   users: {},
   appUsage: [],
-  points: []
+  points: [],
+  discussion: {
+    messages: []
+  }
 };
 
 let state = null;
@@ -27,6 +32,9 @@ async function loadState() {
   } catch (err) {
     state = { ...emptyState };
     await saveState();
+  }
+  if (!state.discussion) {
+    state.discussion = { messages: [] };
   }
   return state;
 }
@@ -143,7 +151,65 @@ app.get("/v1/leaderboard", async (req, res) => {
   });
 });
 
+app.get("/v1/discussion/:topic", async (req, res) => {
+  await loadState();
+  const topic = req.params.topic;
+  const limit = Number(req.query.limit || 50);
+  const messages = state.discussion.messages
+    .filter((msg) => msg.topic === topic)
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .slice(-limit);
+  res.json({ topic, messages });
+});
+
+const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "*"
+  }
+});
+
+io.on("connection", (socket) => {
+  socket.on("join_topic", (topic) => {
+    if (typeof topic === "string" && topic.length > 0) {
+      socket.join(topic);
+    }
+  });
+
+  socket.on("leave_topic", (topic) => {
+    if (typeof topic === "string" && topic.length > 0) {
+      socket.leave(topic);
+    }
+  });
+
+  socket.on("new message", async (data) => {
+    const topic = data?.topic;
+    const text = data?.text;
+    const sender = data?.sender || "Anonymous";
+    if (typeof topic !== "string" || typeof text !== "string" || !text.trim()) {
+      return;
+    }
+
+    await loadState();
+    const message = {
+      topic,
+      text,
+      sender,
+      timestamp: Date.now()
+    };
+    state.discussion.messages.push(message);
+    await saveState();
+
+    io.to(topic).emit("new message", {
+      topic,
+      text,
+      sender,
+      timestamp: message.timestamp
+    });
+  });
+});
+
 const port = process.env.PORT || 8080;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Leaderboard API listening on ${port}`);
 });
