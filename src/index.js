@@ -64,6 +64,18 @@ function getPreviousUsage(userId, appName, date) {
   return rows[0] ?? null;
 }
 
+function generateMessageId(sender, timestamp, text) {
+  // Simple hash function for consistent ID generation
+  const input = `${sender}:${timestamp}:${text}`;
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString();
+}
+
 app.post("/v1/usage", async (req, res) => {
   await loadState();
   const { userId, userName, date, apps } = req.body || {};
@@ -199,6 +211,7 @@ io.on("connection", (socket) => {
     const topic = data?.topic;
     const text = data?.message;
     const sender = data?.user || "Anonymous";
+    const clientMessageId = data?.messageId;
 
     if (typeof topic !== "string" || typeof text !== "string" || !text.trim()) {
       console.error("Invalid message data received");
@@ -206,11 +219,16 @@ io.on("connection", (socket) => {
     }
 
     await loadState();
+
+    // Use provided messageId or generate one
+    const messageId = clientMessageId || generateMessageId(sender, Date.now(), text);
+
     const message = {
       topic,
       text,
       sender,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      messageId
     };
     
     state.discussion.messages.push(message);
